@@ -1,0 +1,21 @@
+NETWORK CAPTURE FROM NETWORKLOGGER
+==================================
+URL: https://lenglengyu.com/app/iphonee.php
+Method: POST
+Request body: ZxDrQs3qzWZQ=oI6SBA2rdJKKzxFuzZl07BpfOHVXNm+RYxAAB7hFEVk=&A9mopdgwnFAua4=YUa3zS99cXNXBwAT&sign=84caec3b807d7d2530e7deaddf22b7d3
+Response: 2Rc3y+BNsWQmeKUEHesHmXTwsYVAI8uadlNEc5udrj2rk0iB08XT2j0iAHJeMaW7 (48 bytes encrypted)
+
+Analysis:
+- Body format: b64_name=encrypted_32bytes&b64_name2=encrypted_12bytes&sign=md5_32hex
+- AES Key: NOT UUID - UUID changes each call. Hardcoded 16-byte key in __const section
+- Sign: MD5, 32 hex chars
+- Response: 48 bytes AES-128 encrypted, base64 encoded
+- Encryption: Same as VCAM - AES-128-ECB simulated via AES-CBC with zero IV block-by-block
+
+BBBBBBBBBBBB class methods:
+- lenglengyu: 16-char base64 (12 bytes decoded) - changes each call
+- llyllyllyllyllylly: UUID - changes each call (random NSUUID)
+- Rand_IP: IP address - changes
+- AAAAAAA/BBBBBBB/CCCCCCCC/DDDDDDD/EEEEEEE/FBBBBBBB: null (populated only during verification)
+- appid: "com.wuxin.Compass" (test_app_1) or similar for Filebox
+- applib: app name
