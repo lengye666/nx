@@ -1,0 +1,95 @@
+name: Full Analysis znzminipro
+
+on: workflow_dispatch
+
+jobs:
+  analyze:
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: FILE INFO
+      run: |
+        file znzminipro.dylib
+        lipo -info znzminipro.dylib
+        ls -la znzminipro.dylib
+
+    - name: ALL STRINGS
+      run: strings znzminipro.dylib > /tmp/strings.txt && cat /tmp/strings.txt
+
+    - name: ALL SYMBOLS (exports + internal)
+      run: |
+        echo "=== ALL SYMBOLS ==="
+        nm znzminipro.dylib 2>/dev/null | head -200
+        echo "=== EXPORTED SYMBOLS ==="
+        nm -gU znzminipro.dylib 2>/dev/null | head -50
+        echo "=== INTERESTING SYMBOLS ==="
+        nm znzminipro.dylib | grep -iE "secure|verify|BBBB|AAAA|CCCC|DDDD|EEEE|FFFF|llydecode|Enstr|Destr|llyKey|lengleng|Rand|llylly|sign|kami|MD5|SHA" | head -40
+
+    - name: SECTION LAYOUT
+      run: otool -l znzminipro.dylib | grep -E "sectname|segname|addr|size|offset" | head -120
+
+    - name: DUMP __const (AES KEY HERE)
+      run: |
+        OFFSET=$(otool -l znzminipro.dylib | grep -A4 "__const" | grep "offset " | awk '{print $2}')
+        SIZE=$(otool -l znzminipro.dylib | grep -A4 "__const" | grep "size " | awk '{print $2}')
+        echo "CONST offset=$OFFSET size=$SIZE"
+        [ -n "$OFFSET" ] && dd if=znzminipro.dylib bs=1 skip=$OFFSET count=$SIZE 2>/dev/null | xxd | head -200
+
+    - name: DUMP __cstring
+      run: |
+        OFFSET=$(otool -l znzminipro.dylib | grep -A4 "__cstring" | grep "offset " | awk '{print $2}')
+        SIZE=$(otool -l znzminipro.dylib | grep -A4 "__cstring" | grep "size " | awk '{print $2}')
+        echo "CSTRING offset=$OFFSET size=$SIZE"
+        [ -n "$OFFSET" ] && dd if=znzminipro.dylib bs=1 skip=$OFFSET count=$SIZE 2>/dev/null | xxd | head -300
+
+    - name: DUMP __data 
+      run: |
+        OFFSET=$(otool -l znzminipro.dylib | grep -A4 "__data " | grep "offset " | awk '{print $2}')
+        SIZE=$(otool -l znzminipro.dylib | grep -A4 "__data " | grep "size " | awk '{print $2}')
+        echo "DATA offset=$OFFSET size=$SIZE"
+        [ -n "$OFFSET" ] && dd if=znzminipro.dylib bs=1 skip=$OFFSET count=$SIZE 2>/dev/null | xxd | head -100
+
+    - name: FULL DISASSEMBLY
+      run: |
+        otool -tV znzminipro.dylib > /tmp/disasm.txt 2>/dev/null
+        wc -l /tmp/disasm.txt
+        head -500 /tmp/disasm.txt
+
+    - name: FIND AES KEY (search __const for 16-byte patterns)
+      run: |
+        # Look for consecutive bytes in __const that could be an AES key
+        OFFSET=$(otool -l znzminipro.dylib | grep -A4 "__const" | grep "offset " | awk '{print $2}')
+        SIZE=$(otool -l znzminipro.dylib | grep -A4 "__const" | grep "size " | awk '{print $2}')
+        [ -n "$OFFSET" ] && dd if=znzminipro.dylib bs=1 skip=$OFFSET count=$SIZE 2>/dev/null | xxd -c16 | grep -v "0000 0000 0000 0000 0000 0000 0000 0000" | head -50
+
+    - name: FIND SIGN ALGORITHM
+      run: |
+        echo "=== Search for CC_MD5 / CC_SHA / sign references ==="
+        grep -n -i "CC_MD5\|CC_SHA\|MD5\|sign\|kCC" /tmp/disasm.txt | head -30
+        echo "=== In strings ==="
+        grep -n -i "MD5\|sha\|sign" /tmp/strings.txt | head -10
+
+    - name: FIND URL CONSTRUCTION
+      run: |
+        echo "=== URL construction in disasm ==="
+        grep -n "URLWithString\|NSURL\|requestWithURL\|iphone\|php\|app/" /tmp/disasm.txt | head -20
+
+    - name: FIND secure_needs_verify
+      run: |
+        ADDR=$(nm znzminipro.dylib | grep "secure_needs_verify" | awk '{print $1}')
+        echo "secure_needs_verify at: $ADDR"
+        [ -n "$ADDR" ] && grep -n -B2 -A80 " _$ADDR" /tmp/disasm.txt | head -100
+
+    - name: FIND Enstr/Destr CALLSITES
+      run: |
+        echo "=== Enstr message sends ==="
+        grep -n "Enstr\|Destr" /tmp/disasm.txt | head -30
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: znzminipro_analysis
+        path: |
+          /tmp/disasm.txt
+          /tmp/strings.txt
+
