@@ -30,13 +30,13 @@ jobs:
     - name: Class Dump SuperVIP
       run: |
         brew install class-dump 2>/dev/null || true
-        file SuperVIP_binary
-        class-dump -H SuperVIP_binary -o /tmp/supervip/ 2>/dev/null || echo "class-dump failed, using strings"
+        file SuperVIP
+        class-dump -H SuperVIP -o /tmp/supervip/ 2>/dev/null || echo "class-dump failed, using strings"
         echo "=== All headers ==="
         find /tmp/supervip -name "*.h" 2>/dev/null | head -50
         echo "=== ViewControllers ==="
         find /tmp/supervip -name "*.h" 2>/dev/null | xargs -I{} basename {} | grep -iE "view|controller|home|main|tab|root|app|list|store|login|mine|profile|download" | sort
         echo "=== All strings (UI related) ==="
-        strings SuperVIP_binary | grep -iE "ViewController|Controller|View|Tab|Home|Main|Store|AppList|Download|Login|Mine|Profile|Settings|Web|Browser" | sort -u | head -50
+        strings SuperVIP | grep -iE "ViewController|Controller|View|Tab|Home|Main|Store|AppList|Download|Login|Mine|Profile|Settings|Web|Browser" | sort -u | head -50
     - uses: actions/upload-artifact@v4
       with: {name: supervip_headers, path: /tmp/supervip}
