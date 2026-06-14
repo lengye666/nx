@@ -1,72 +1,57 @@
-name: Full Analysis znzminipro
+name: Full Analysis
 
 on: workflow_dispatch
 
 jobs:
-  analyze:
+  znzminipro:
     runs-on: macos-latest
     steps:
     - uses: actions/checkout@v4
-    
     - name: FILE INFO
       run: file znzminipro.dylib && ls -la znzminipro.dylib
-
     - name: ALL STRINGS
       run: strings znzminipro.dylib > /tmp/strings.txt && cat /tmp/strings.txt
-
     - name: ALL SYMBOLS
       run: |
-        echo "=== ALL SYMBOLS ===" && nm znzminipro.dylib 2>/dev/null | head -200
+        echo "=== ALL ===" && nm znzminipro.dylib 2>/dev/null | head -200
         echo "=== INTERESTING ===" && nm znzminipro.dylib | grep -iE "secure|verify|BBBB|AAAA|CCCC|DDDD|EEEE|FFFF|llydecode|Enstr|Destr|llyKey|lengleng|Rand|llylly|sign|kami|MD5|SHA" | head -40
-
     - name: SECTION LAYOUT
       run: otool -l znzminipro.dylib | grep -E "sectname|segname|addr|size|offset" | head -120
-
-    - name: DUMP __const (AES KEY HERE)
+    - name: DUMP __const
       run: |
         OFFSET=$(otool -l znzminipro.dylib | grep -A4 __const | grep offset | awk '{print $2}' | head -1)
         SIZE=$(otool -l znzminipro.dylib | grep -A4 __const | grep size | awk '{print $2}' | head -1)
-        echo "CONST offset=$OFFSET size=$SIZE"
         if [ -n "$OFFSET" ] && [ -n "$SIZE" ] && [ "$SIZE" != "" ]; then dd if=znzminipro.dylib bs=1 skip=$OFFSET count=$SIZE 2>/dev/null | xxd | head -200; fi
-
     - name: DUMP __cstring
       run: |
         OFFSET=$(otool -l znzminipro.dylib | grep -A4 __cstring | grep offset | awk '{print $2}' | head -1)
         SIZE=$(otool -l znzminipro.dylib | grep -A4 __cstring | grep size | awk '{print $2}' | head -1)
-        echo "CSTRING offset=$OFFSET size=$SIZE"
         if [ -n "$OFFSET" ] && [ -n "$SIZE" ] && [ "$SIZE" != "" ]; then dd if=znzminipro.dylib bs=1 skip=$OFFSET count=$SIZE 2>/dev/null | xxd | head -300; fi
-
     - name: FULL DISASSEMBLY
       run: otool -tV znzminipro.dylib > /tmp/disasm.txt 2>/dev/null; wc -l /tmp/disasm.txt; head -500 /tmp/disasm.txt
-
-    - name: FIND AES KEY PATTERNS
-      run: |
-        OFFSET=$(otool -l znzminipro.dylib | grep -A4 __const | grep offset | awk '{print $2}' | head -1)
-        SIZE=$(otool -l znzminipro.dylib | grep -A4 __const | grep size | awk '{print $2}' | head -1)
-        if [ -n "$OFFSET" ] && [ -n "$SIZE" ] && [ "$SIZE" != "" ]; then 
-          dd if=znzminipro.dylib bs=1 skip=$OFFSET count=$SIZE 2>/dev/null | xxd -c16 | grep -v "0000 0000 0000 0000 0000 0000 0000 0000" | head -50
-        fi
-
-    - name: FIND SIGN ALGORITHM
-      run: |
-        echo "=== CC_MD5/SHA in disasm ===" && grep -n -i "CC_MD5\|CC_SHA\|MD5\|sign\|kCC" /tmp/disasm.txt | head -30
-        echo "=== in strings ===" && grep -n -i "MD5\|sha\|sign" /tmp/strings.txt | head -10
-
-    - name: FIND URL CONSTRUCTION
-      run: grep -n "URLWithString\|NSURL\|requestWithURL\|iphone\|php\|app/" /tmp/disasm.txt | head -20 || echo "none"
-
-    - name: FIND secure_needs_verify
-      run: |
-        ADDR=$(nm znzminipro.dylib | grep secure_needs_verify | awk '{print $1}')
-        echo "secure_needs_verify at: $ADDR"
-        if [ -n "$ADDR" ]; then grep -n -B2 -A80 " _$ADDR" /tmp/disasm.txt | head -100; fi
-
-    - name: FIND Enstr/Destr CALLSITES
-      run: grep -n "Enstr\|Destr" /tmp/disasm.txt | head -30 || echo "none"
-
     - uses: actions/upload-artifact@v4
       with:
         name: znzminipro_analysis
-        path: |
-          /tmp/disasm.txt
-          /tmp/strings.txt
+        path: /tmp/disasm.txt
+
+  one_dylib:
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: FILE INFO
+      run: file one.dylib && ls -la one.dylib
+    - name: ALL STRINGS
+      run: strings one.dylib | sort -u > /tmp/one_strings.txt && cat /tmp/one_strings.txt
+    - name: ALL SYMBOLS
+      run: |
+        echo "=== ALL ===" && nm one.dylib 2>/dev/null | head -200
+        echo "=== EXPORTS ===" && nm -gU one.dylib 2>/dev/null | head -50
+    - name: SECTION LAYOUT
+      run: otool -l one.dylib | grep -E "sectname|segname|addr|size|offset" | head -80
+    - name: FIND PROTECTION CLASSES
+      run: |
+        strings one.dylib | grep -iE "verify|check|valid|licens|auth|bypass|guard|protect|secure|kami|key|encode|decode|crypt|proxy|hook|swiz|lly|bbbb|znzn|mini|leng" | head -30
+    - uses: actions/upload-artifact@v4
+      with:
+        name: one_dylib_analysis
+        path: /tmp/one_strings.txt
