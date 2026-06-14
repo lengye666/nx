@@ -3,40 +3,22 @@ name: Full Analysis
 on: workflow_dispatch
 
 jobs:
-  znzminipro:
-    runs-on: macos-latest
-    steps:
-    - uses: actions/checkout@v4
-    - name: FILE INFO
-      run: file znzminipro.dylib && ls -la znzminipro.dylib
-    - name: ALL STRINGS
-      run: strings znzminipro.dylib > /tmp/strings.txt; wc -l /tmp/strings.txt
-    - uses: actions/upload-artifact@v4
-      with: {name: znzminipro_strings, path: /tmp/strings.txt}
-
-  one_dylib:
-    runs-on: macos-latest
-    steps:
-    - uses: actions/checkout@v4
-    - name: ALL STRINGS
-      run: strings one.dylib | sort -u > /tmp/one_strings.txt; wc -l /tmp/one_strings.txt
-    - uses: actions/upload-artifact@v4
-      with: {name: one_strings, path: /tmp/one_strings.txt}
-
   supervip:
     runs-on: macos-latest
     steps:
     - uses: actions/checkout@v4
-    - name: Class Dump SuperVIP
+    - name: File Info
+      run: file SuperVIP && ls -la SuperVIP
+    - name: All UI Strings
       run: |
-        brew install class-dump 2>/dev/null || true
-        file SuperVIP
-        class-dump -H SuperVIP -o /tmp/supervip/ 2>/dev/null || echo "class-dump failed, using strings"
-        echo "=== All headers ==="
-        find /tmp/supervip -name "*.h" 2>/dev/null | head -50
-        echo "=== ViewControllers ==="
-        find /tmp/supervip -name "*.h" 2>/dev/null | xargs -I{} basename {} | grep -iE "view|controller|home|main|tab|root|app|list|store|login|mine|profile|download" | sort
-        echo "=== All strings (UI related) ==="
-        strings SuperVIP | grep -iE "ViewController|Controller|View|Tab|Home|Main|Store|AppList|Download|Login|Mine|Profile|Settings|Web|Browser" | sort -u | head -50
+        strings SuperVIP > /tmp/sv_strings.txt
+        echo "=== ViewController names ==="
+        grep -iE "ViewController|Controller$|TabBar|Tab.*Controller|Navigation" /tmp/sv_strings.txt | sort -u
+        echo "=== Tab titles ==="
+        grep -iE "主页|应用|注入|缓存|下载|我的|设置|首页|Home|App|Inject|Cache|Mine|Profile" /tmp/sv_strings.txt | sort -u
+        echo "=== Button/View names ==="
+        grep -iE "Button|ImageView|Label|TableView|CollectionView|ScrollView|StackView" /tmp/sv_strings.txt | sort -u | head -30
+        echo "=== All ObjC class names ==="
+        grep -oE '[A-Z][a-zA-Z0-9]{2,}(ViewController|Controller|View|TabBar|Tab|Manager|Model)' /tmp/sv_strings.txt | sort -u | head -40
     - uses: actions/upload-artifact@v4
-      with: {name: supervip_headers, path: /tmp/supervip}
+      with: {name: supervip_strings, path: /tmp/sv_strings.txt}
