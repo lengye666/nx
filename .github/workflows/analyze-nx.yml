@@ -10,48 +10,33 @@ jobs:
     - name: FILE INFO
       run: file znzminipro.dylib && ls -la znzminipro.dylib
     - name: ALL STRINGS
-      run: strings znzminipro.dylib > /tmp/strings.txt && cat /tmp/strings.txt
-    - name: ALL SYMBOLS
-      run: |
-        echo "=== ALL ===" && nm znzminipro.dylib 2>/dev/null | head -200
-        echo "=== INTERESTING ===" && nm znzminipro.dylib | grep -iE "secure|verify|BBBB|AAAA|CCCC|DDDD|EEEE|FFFF|llydecode|Enstr|Destr|llyKey|lengleng|Rand|llylly|sign|kami|MD5|SHA" | head -40
-    - name: SECTION LAYOUT
-      run: otool -l znzminipro.dylib | grep -E "sectname|segname|addr|size|offset" | head -120
-    - name: DUMP __const
-      run: |
-        OFFSET=$(otool -l znzminipro.dylib | grep -A4 __const | grep offset | awk '{print $2}' | head -1)
-        SIZE=$(otool -l znzminipro.dylib | grep -A4 __const | grep size | awk '{print $2}' | head -1)
-        if [ -n "$OFFSET" ] && [ -n "$SIZE" ] && [ "$SIZE" != "" ]; then dd if=znzminipro.dylib bs=1 skip=$OFFSET count=$SIZE 2>/dev/null | xxd | head -200; fi
-    - name: DUMP __cstring
-      run: |
-        OFFSET=$(otool -l znzminipro.dylib | grep -A4 __cstring | grep offset | awk '{print $2}' | head -1)
-        SIZE=$(otool -l znzminipro.dylib | grep -A4 __cstring | grep size | awk '{print $2}' | head -1)
-        if [ -n "$OFFSET" ] && [ -n "$SIZE" ] && [ "$SIZE" != "" ]; then dd if=znzminipro.dylib bs=1 skip=$OFFSET count=$SIZE 2>/dev/null | xxd | head -300; fi
-    - name: FULL DISASSEMBLY
-      run: otool -tV znzminipro.dylib > /tmp/disasm.txt 2>/dev/null; wc -l /tmp/disasm.txt; head -500 /tmp/disasm.txt
+      run: strings znzminipro.dylib > /tmp/strings.txt; wc -l /tmp/strings.txt
     - uses: actions/upload-artifact@v4
-      with:
-        name: znzminipro_analysis
-        path: /tmp/disasm.txt
+      with: {name: znzminipro_strings, path: /tmp/strings.txt}
 
   one_dylib:
     runs-on: macos-latest
     steps:
     - uses: actions/checkout@v4
-    - name: FILE INFO
-      run: file one.dylib && ls -la one.dylib
     - name: ALL STRINGS
-      run: strings one.dylib | sort -u > /tmp/one_strings.txt && cat /tmp/one_strings.txt
-    - name: ALL SYMBOLS
-      run: |
-        echo "=== ALL ===" && nm one.dylib 2>/dev/null | head -200
-        echo "=== EXPORTS ===" && nm -gU one.dylib 2>/dev/null | head -50
-    - name: SECTION LAYOUT
-      run: otool -l one.dylib | grep -E "sectname|segname|addr|size|offset" | head -80
-    - name: FIND PROTECTION CLASSES
-      run: |
-        strings one.dylib | grep -iE "verify|check|valid|licens|auth|bypass|guard|protect|secure|kami|key|encode|decode|crypt|proxy|hook|swiz|lly|bbbb|znzn|mini|leng" | head -30
+      run: strings one.dylib | sort -u > /tmp/one_strings.txt; wc -l /tmp/one_strings.txt
     - uses: actions/upload-artifact@v4
-      with:
-        name: one_dylib_analysis
-        path: /tmp/one_strings.txt
+      with: {name: one_strings, path: /tmp/one_strings.txt}
+
+  supervip:
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Class Dump SuperVIP
+      run: |
+        brew install class-dump 2>/dev/null || true
+        file SuperVIP_binary
+        class-dump -H SuperVIP_binary -o /tmp/supervip/ 2>/dev/null || echo "class-dump failed, using strings"
+        echo "=== All headers ==="
+        find /tmp/supervip -name "*.h" 2>/dev/null | head -50
+        echo "=== ViewControllers ==="
+        find /tmp/supervip -name "*.h" 2>/dev/null | xargs -I{} basename {} | grep -iE "view|controller|home|main|tab|root|app|list|store|login|mine|profile|download" | sort
+        echo "=== All strings (UI related) ==="
+        strings SuperVIP_binary | grep -iE "ViewController|Controller|View|Tab|Home|Main|Store|AppList|Download|Login|Mine|Profile|Settings|Web|Browser" | sort -u | head -50
+    - uses: actions/upload-artifact@v4
+      with: {name: supervip_headers, path: /tmp/supervip}
